@@ -1,98 +1,120 @@
-using Claims.Auditing;
+using Asp.Versioning;
+using Claims.Application.Models;
+using Claims.Application.Services.Covers;
+using Claims.Application.Services.PremiumCalculation;
+using Claims.Contracts.Requests;
+using Claims.Contracts.Responses;
+using Claims.Domain.Aggregates;
+using Claims.Filters;
+using MapsterMapper;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using CoverType = Claims.Application.Models.Enums.CoverType;
 
 namespace Claims.Controllers;
 
-[ApiController]
-[Route("[controller]")]
-public class CoversController : ControllerBase
+[ApiVersion("1.0")]
+[Route("v{version:apiVersion}/[controller]")]
+public class CoversController : DocumentedControllerBase
 {
-    private readonly ClaimsContext _claimsContext;
+    private readonly ICoversService _coversService;
+    private readonly IMapper _mapper;
+    private readonly IPremiumCalculationService _premiumCalculationService;
+    private readonly IChainService _chainService;
     private readonly ILogger<CoversController> _logger;
-    private readonly Auditer _auditer;
 
-    public CoversController(ClaimsContext claimsContext, AuditContext auditContext, ILogger<CoversController> logger)
+    public CoversController(
+        IMapper mapper,
+        ICoversService coversService,
+        IPremiumCalculationService premiumCalculationService,
+        IChainService chainService,
+        ILogger<CoversController> logger)
     {
-        _claimsContext = claimsContext;
+        _coversService = coversService;
+        _mapper = mapper;
+        _premiumCalculationService = premiumCalculationService;
+        _chainService = chainService;
         _logger = logger;
-        _auditer = new Auditer(auditContext);
     }
-
+    
+    /// <summary>
+    /// You can Compute premium here
+    /// </summary>
+    /// <remarks>
+    ///  Premium depends on the type of the covered object and the length of the insurance period.
+    ///  *   Base day rate was set to be 1250.
+    ///  *   Yacht should be 10% more expensive, Passenger ship 20%, Tanker 50%, and other types 30%
+    ///  *   The length of the insurance period should influence the premium progressively:
+    ///  *   First 30 days are computed based on the logic above
+    ///  *   Following 150 days are discounted by 5% for Yacht and by 2% for other types
+    ///  *   The remaining days are discounted by additional 3% for Yacht and by 1% for other types
+    ///  
+    /// Sample request:
+    ///     
+    ///     POST /v1/claims
+    ///     {
+    ///         "startDate": "2024-01-01",
+    ///         "endDate": "2024-06-01",
+    ///         "coverType": "Yacht"
+    ///     }
+    /// </remarks>
+    /// <param name="request"></param>
+    /// <returns> This endpoint returns a list of Accounts.</returns>
     [HttpPost("compute")]
-    public async Task<ActionResult> ComputePremiumAsync(DateTime startDate, DateTime endDate, CoverType coverType)
+    [ProducesResponseType(typeof(decimal), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(decimal), StatusCodes.Status200OK)]
+    public ActionResult<decimal> ComputePremiumAsync([FromBody] ComputePremiumRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(ComputePremium(startDate, endDate, coverType));
-    }
+        var type = _mapper.Map<CoverType>(request.CoverType);
+        var result = _premiumCalculationService.ComputePremium(request.StartDate, request.EndDate, type);
+        if (result.IsFailed)
+            return _chainService.Execute(result.Errors);
 
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Cover>>> GetAsync()
-    {
-        var results = await _claimsContext.Covers.ToListAsync();
-        return Ok(results);
-    }
-
-    [HttpGet("{id}")]
-    public async Task<ActionResult<Cover>> GetAsync(string id)
-    {
-        var results = await _claimsContext.Covers.ToListAsync();
-        return Ok(results.SingleOrDefault(cover => cover.Id == id));
+        return Ok(result.Value);
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateAsync(Cover cover)
+    [ProducesResponseType(typeof(CoverResponse), StatusCodes.Status201Created)]
+    public async Task<ActionResult<CoverResponse>> CreateAsync([FromBody] CreateCoverRequest cover, CancellationToken cancellationToken = default)
     {
-        cover.Id = Guid.NewGuid().ToString();
-        cover.Premium = ComputePremium(cover.StartDate, cover.EndDate, cover.Type);
-        _claimsContext.Covers.Add(cover);
-        await _claimsContext.SaveChangesAsync();
-        _auditer.AuditCover(cover.Id, "POST");
-        return Ok(cover);
+        var request = _mapper.Map<CreateCoverDto>(cover);
+        var result = await _coversService.CreateAsync(request, cancellationToken);
+        if (result.IsFailed)
+            return _chainService.Execute(result.Errors);
+
+        return Created($"{result.Value.Id}", _mapper.Map<CoverResponse>(result.Value));
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(IEnumerable<CoverResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<Cover>>> GetListAsync(CancellationToken cancellationToken = default)
+    {
+        // TODO pagination
+        var result = await _coversService.GetListAsync(cancellationToken);
+        if (result.IsFailed)
+            return _chainService.Execute(result.Errors);
+
+        return Ok(_mapper.Map<IEnumerable<CoverResponse>>(result.Value));
+    }
+
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(IEnumerable<CoverResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<Cover>> GetAsync([FromRoute] Guid id, CancellationToken cancellationToken = default)
+    {
+        var result = await _coversService.GetAsync(id, cancellationToken);
+        if (result.IsFailed)
+            return _chainService.Execute(result.Errors);
+
+        return Ok(_mapper.Map<CoverResponse>(result.Value));
     }
 
     [HttpDelete("{id}")]
-    public async Task DeleteAsync(string id)
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<ActionResult> DeleteAsync([FromRoute] Guid id, CancellationToken cancellationToken = default)
     {
-        _auditer.AuditCover(id, "DELETE");
-        var cover = await _claimsContext.Covers.Where(cover => cover.Id == id).SingleOrDefaultAsync();
-        if (cover is not null)
-        {
-            _claimsContext.Covers.Remove(cover);
-            await _claimsContext.SaveChangesAsync();
-        }
-    }
+        var result = await _coversService.DeleteAsync(id, cancellationToken);
+        if (result.IsFailed)
+            return _chainService.Execute(result.Errors);
 
-    private decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)
-    {
-        var multiplier = 1.3m;
-        if (coverType == CoverType.Yacht)
-        {
-            multiplier = 1.1m;
-        }
-
-        if (coverType == CoverType.PassengerShip)
-        {
-            multiplier = 1.2m;
-        }
-
-        if (coverType == CoverType.Tanker)
-        {
-            multiplier = 1.5m;
-        }
-
-        var premiumPerDay = 1250 * multiplier;
-        var insuranceLength = (endDate - startDate).TotalDays;
-        var totalPremium = 0m;
-
-        for (var i = 0; i < insuranceLength; i++)
-        {
-            if (i < 30) totalPremium += premiumPerDay;
-            if (i < 180 && coverType == CoverType.Yacht) totalPremium += premiumPerDay - premiumPerDay * 0.05m;
-            else if (i < 180) totalPremium += premiumPerDay - premiumPerDay * 0.02m;
-            if (i < 365 && coverType != CoverType.Yacht) totalPremium += premiumPerDay - premiumPerDay * 0.03m;
-            else if (i < 365) totalPremium += premiumPerDay - premiumPerDay * 0.08m;
-        }
-
-        return totalPremium;
+        return NoContent();
     }
 }

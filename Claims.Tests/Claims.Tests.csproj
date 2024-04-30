@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Claims.Tests.Common\Claims.Tests.Common.csproj" />
     <ProjectReference Include="..\Claims\Claims.csproj" />
   </ItemGroup>
 

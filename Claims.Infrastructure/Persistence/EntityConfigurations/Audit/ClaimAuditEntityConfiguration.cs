@@ -1,6 +1,5 @@
 ﻿using Claims.Infrastructure.Persistence.Common;
 using Claims.Infrastructure.Persistence.Entities;
-using Claims.Infrastructure.Persistence.Entities.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -25,10 +24,7 @@ public class ClaimAuditEntityConfiguration : IEntityTypeConfiguration<ClaimAudit
             .IsRequired();
         
         builder.Property(c => c.HttpRequestType)
-            .HasConversion(
-                status => status.ToString(),
-                value => (HttpRequestType)Enum.Parse(typeof(HttpRequestType), value)
-            )
+            .HasConversion<string>()
             .HasMaxLength(EntityConfiguration.MaxLengthConstants.HttpRequestType)
             .IsRequired();
     }

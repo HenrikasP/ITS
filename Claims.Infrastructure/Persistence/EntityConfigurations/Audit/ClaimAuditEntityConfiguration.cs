@@ -14,8 +14,8 @@ public class ClaimAuditEntityConfiguration : IEntityTypeConfiguration<ClaimAudit
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id)
-            .IsRequired()
-            .ValueGeneratedNever();
+            .UseIdentityColumn()
+            .IsRequired();
 
         builder.Property(c => c.ClaimId)
             .IsRequired();

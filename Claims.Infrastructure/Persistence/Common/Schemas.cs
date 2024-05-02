@@ -6,8 +6,8 @@ public class Schemas
 
     public class Tables
     {
-        public const string ClaimAudit = "ClaimAudit";
-        public const string CoverAudit = "CoverAudit";
+        public const string ClaimAudit = "ClaimAudits";
+        public const string CoverAudit = "CoverAudits";
     }
 
     public class Sequences

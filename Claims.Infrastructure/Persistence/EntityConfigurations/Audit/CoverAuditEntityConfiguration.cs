@@ -14,8 +14,8 @@ public class CoverAuditEntityConfiguration : IEntityTypeConfiguration<CoverAudit
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id)
-            .IsRequired()
-            .ValueGeneratedNever();
+            .UseIdentityColumn()
+            .IsRequired();
 
         builder.Property(c => c.CoverId)
             .IsRequired();

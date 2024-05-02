@@ -9,11 +9,13 @@ public class CoverEntity
     public Guid Id { get; set; }
 
     [BsonElement("startDate")]
-    [BsonDateTimeOptions(DateOnly = true)]
+    // in 8.0.0 version is currently not supported
+    // [BsonDateTimeOptions(DateOnly = true)]
     public DateTime StartDate { get; set; }
 
     [BsonElement("endDate")]
-    [BsonDateTimeOptions(DateOnly = true)]
+    // in 8.0.0 version is currently not supported
+    // [BsonDateTimeOptions(DateOnly = true)]
     public DateTime EndDate { get; set; }
 
     [BsonElement("claimType")]

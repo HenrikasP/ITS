@@ -12,7 +12,8 @@ public class ClaimEntity
     public Guid CoverId { get; set; }
 
     [BsonElement("created")]
-    [BsonDateTimeOptions(DateOnly = true)]
+    // in 8.0.0 version is currently not supported
+    // [BsonDateTimeOptions(DateOnly = true)]
     public DateTime Created { get; set; }
 
     [BsonElement("name")]

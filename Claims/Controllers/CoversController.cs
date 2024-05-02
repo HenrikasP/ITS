@@ -62,7 +62,7 @@ public class CoversController : DocumentedControllerBase
     [HttpPost("compute")]
     [ProducesResponseType(typeof(decimal), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(decimal), StatusCodes.Status200OK)]
-    public ActionResult<decimal> ComputePremiumAsync([FromBody] ComputePremiumRequest request, CancellationToken cancellationToken = default)
+    public ActionResult<decimal> ComputePremium([FromBody] ComputePremiumRequest request)
     {
         var type = _mapper.Map<CoverType>(request.CoverType);
         var result = _premiumCalculationService.ComputePremium(request.StartDate, request.EndDate, type);

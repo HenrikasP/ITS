@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Claims.Infrastructure.Persistence;
 
-public class AuditContext : DbContext
+public class AuditContext : BaseContext<AuditContext>
 {
     public AuditContext(DbContextOptions<AuditContext> options) : base(options)
     {
